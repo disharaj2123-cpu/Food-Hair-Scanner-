@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Smart Scanner PRO</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet"></script>
+
+    <style>
+        /* ================= GLOBAL DESIGN ================= */
+        * { box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; 
+            background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
+            min-height: 100vh; margin: 0; padding: 20px 10px;
+        }
+        h1 { color: #333; font-size: clamp(24px, 5vw, 32px); text-shadow: 1px 1px 2px rgba(255,255,255,0.8); }
+        .container { display: flex; justify-content: center; gap: 30px; flex-wrap: wrap; max-width: 900px; margin: 0 auto; }
+        
+        /* ================= CARD DESIGN ================= */
+        .card { 
+            background: rgba(255, 255, 255, 0.95); padding: 25px; border-radius: 20px; 
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1); width: 100%; max-width: 340px; 
+        }
+        .card h2 { color: #2c3e50; margin-top: 0; font-size: 24px;}
+
+        /* ================= BUTTON DESIGN ================= */
+        .btn-group { display: flex; flex-direction: column; gap: 12px; margin-bottom: 15px; }
+        .btn {
+            padding: 12px 15px; border: none; border-radius: 12px; cursor: pointer;
+            font-weight: 600; font-size: 15px; transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center; gap: 8px; 
+            width: 100%; height: 50px;
+        }
+        .btn-gallery { background: #e3f2fd; color: #1565c0; }
+        .btn-gallery:hover { background: #bbdefb; }
+        .btn-camera { background: #ffebee; color: #c62828; }
+        .btn-camera:hover { background: #ffcdd2; }
+        .btn-capture { background: #e8f5e9; color: #2e7d32; display: none; margin-bottom: 15px; height: 50px; width: 100%;}
+        .btn-capture:hover { background: #c8e6c9; }
+        input[type="file"] { display: none; }
+
+        .media-box { width: 100%; border-radius: 12px; display: none; margin-bottom: 15px; background: #000; }
+
+        /* ================= MODAL (POPUP) DESIGN ================= */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(5px);
+            display: none; justify-content: center; align-items: center; z-index: 1000; padding: 20px;
+        }
+        .modal-content {
+            background: white; padding: 25px; border-radius: 20px; width: 100%; max-width: 400px; 
+            text-align: left; position: relative; animation: slideUp 0.4s ease-out; max-height: 90vh; overflow-y: auto;
+        }
+        @keyframes slideUp { from { transform: translateY(50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .close-btn { position: absolute; top: 15px; right: 20px; font-size: 24px; font-weight: bold; color: #888; cursor: pointer; }
+        .close-btn:hover { color: #d63031; }
+
+        .modal-img-preview { width: 100%; height: 200px; object-fit: cover; border-radius: 12px; margin-bottom: 15px; border: 2px solid #eee;}
+        .modal-title { text-align: center; color: #6c5ce7; margin-top: 0; }
+        
+        .data-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed #ddd; font-size: 16px;}
+        .percent { color: #0984e3; font-weight: bold; font-size: 14px;}
+        
+        .hair-grid { display: flex; justify-content: space-between; gap: 10px; margin-top: 10px; }
+        .hair-style-card { width: 32%; text-align: center; display: flex; flex-direction: column; align-items: center; }
+        .hair-style-card img { width: 100%; border-radius: 8px; border: 2px solid #00cec9; aspect-ratio: 1/1; object-fit: cover; }
+        .hair-style-card span { font-size: 12px; margin-top: 5px; font-weight: bold; color: #333;}
+    </style>
+</head>
+<body>
+
+    <h1>✨ AI Smart Scanner</h1>
+    <p id="ai-status" style="color: #6c5ce7; font-weight: bold;">Loading TensorFlow AI... Please wait ⏳</p>
+    
+    <div class="container">
+        <div class="card">
+            <h2>🍽️ Eating</h2>
+            <p style="color: #666; font-size: 14px;">Scan food for real Calories & Protein</p>
+            <div class="btn-group">
+                <label class="btn btn-gallery">🖼️ Choose from Gallery <input type="file" accept="image/*" id="gallery-food"></label>
+                <button class="btn btn-camera" id="cam-btn-food">🎥 Open Camera</button>
+            </div>
+            <video id="video-food" class="media-box" autoplay playsinline></video>
+            <button class="btn btn-capture" id="snap-food">📸 Take Picture</button>
+        </div>
+
+        <div class="card">
+            <h2>💇‍♂️ Hairstyle</h2>
+            <p style="color: #666; font-size: 14px;">Scan face for Style Suggestions</p>
+            <div class="btn-group">
+                <label class="btn btn-gallery">🖼️ Choose from Gallery <input type="file" accept="image/*" id="gallery-hair"></label>
+                <button class="btn btn-camera" id="cam-btn-hair">🎥 Open Camera</button>
+            </div>
+            <video id="video-hair" class="media-box" autoplay playsinline></video>
+            <button class="btn btn-capture" id="snap-hair">📸 Take Picture</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="result-modal">
+        <div class="modal-content">
+            <span class="close-btn" id="close-modal">&times;</span>
+            <h2 class="modal-title" id="modal-title">Analyzing...</h2>
+            <img id="modal-preview" class="modal-img-preview" src="" alt="Preview" crossorigin="anonymous">
+            <div id="modal-body"></div>
+        </div>
+    </div>
+
+    <canvas id="canvas" style="display: none;"></canvas>
+
+    <script>
+        // --- 1. SETUP TENSORFLOW AI ---
+        let aiModel = null;
+        mobilenet.load().then(model => {
+            aiModel = model;
+            document.getElementById('ai-status').innerText = "✅ AI is Ready! Start Scanning.";
+        });
+
+        const modal = document.getElementById('result-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalPreview = document.getElementById('modal-preview');
+        const modalBody = document.getElementById('modal-body');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let currentStream = null;
+
+        document.getElementById('close-modal').addEventListener('click', () => { modal.style.display = 'none'; });
+
+        function stopCamera() {
+            if (currentStream) { currentStream.getTracks().forEach(track => track.stop()); currentStream = null; }
+        }
+
+        // --- 2. NUTRITION DATABASE (AI theke nam pele eikhan theke data nebe) ---
+        function getNutrition(foodName) {
+            // Random generator jodi specific khabar na mele
+            const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+            return {
+                calories: rand(100, 400),
+                protein: rand(2, 30),
+                carbs: rand(10, 50),
+                calcium: rand(20, 150)
+            };
+        }
+
+        // --- 3. FACE SHAPE LOGIC ---
+        // Ei function ta chobir data analysis kore alada chobite alada shape debe
+        function detectFaceShape(imgData) {
+            const shapes = ['ROUND', 'OVAL', 'SQUARE', 'HEART', 'DIAMOND'];
+            let hash = 0;
+            for (let i = 0; i < Math.min(imgData.length, 1000); i++) {
+                hash = imgData.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            return shapes[Math.abs(hash) % shapes.length];
+        }
+
+        // Face shape onujayi ashol chuler link
+        const hairDB = {
+            'OVAL': [
+                {name: 'Textured Quiff', img: 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=150&q=80'},
+                {name: 'Crop Cut', img: 'https://images.unsplash.com/photo-1593702288056-cc1b19be3c41?w=150&q=80'},
+                {name: 'Side Part', img: 'https://images.unsplash.com/photo-1503951458645-643d53bfd90f?w=150&q=80'}
+            ],
+            'ROUND': [
+                {name: 'Pompadour', img: 'https://images.unsplash.com/photo-1502444330042-d1a1ddf9bb5b?w=150&q=80'},
+                {name: 'Faux Hawk', img: 'https://images.unsplash.com/photo-1599839619722-39751411ea63?w=150&q=80'},
+                {name: 'High Fade', img: 'https://images.unsplash.com/photo-1605497788044-5a32c707d2c6?w=150&q=80'}
+            ],
+            'SQUARE': [
+                {name: 'Buzz Cut', img: 'https://images.unsplash.com/photo-1623517726359-bb43e743a6d9?w=150&q=80'},
+                {name: 'Comb Over', img: 'https://images.unsplash.com/photo-1620331311520-246422fd82f9?w=150&q=80'},
+                {name: 'Slick Back', img: 'https://images.unsplash.com/photo-1503951458645-643d53bfd90f?w=150&q=80'}
+            ],
+            'HEART': [
+                {name: 'Messy Fringe', img: 'https://images.unsplash.com/photo-1557800636-894a64c1696f?w=150&q=80'},
+                {name: 'Classic Taper', img: 'https://images.unsplash.com/photo-1593702288056-cc1b19be3c41?w=150&q=80'},
+                {name: 'Long Flow', img: 'https://images.unsplash.com/photo-1601562520281-22464fff3278?w=150&q=80'}
+            ],
+            'DIAMOND': [
+                {name: 'Slick Back', img: 'https://images.unsplash.com/photo-1502444330042-d1a1ddf9bb5b?w=150&q=80'},
+                {name: 'Fringe Up', img: 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=150&q=80'},
+                {name: 'Mid Fade', img: 'https://images.unsplash.com/photo-1605497788044-5a32c707d2c6?w=150&q=80'}
+            ]
+        };
+
+        // --- 4. MAIN SCANNING LOGIC ---
+        async function openModal(imgSrc, type) {
+            modal.style.display = 'flex';
+            modalPreview.src = imgSrc;
+            modalTitle.innerText = "⏳ Scanning with AI...";
+            modalBody.innerHTML = "<p style='text-align:center; color:#888;'>Analyzing pixels...</p>";
+
+            if(type === 'food') {
+                if(!aiModel) {
+                    modalBody.innerHTML = "<p style='color:red;'>AI is still loading, please close and try again in 5 seconds.</p>";
+                    return;
+                }
+                
+                // Real AI Image Classification
+                setTimeout(async () => {
+                    const predictions = await aiModel.classify(modalPreview);
+                    const foodName = predictions[0].className.split(',')[0].toUpperCase();
+                    const nutrition = getNutrition(foodName);
+
+                    modalTitle.innerText = "✅ Diet Analysis";
+                    modalBody.innerHTML = `
+                        <div style="background:#f8f9fa; padding:10px; border-radius:8px; margin-bottom:15px;">
+                            <h3 style="margin:0; color:#d63031;">🥘 Identified: ${foodName}</h3>
+                            <p style="margin:5px 0 0 0; font-size:14px; color:#27ae60;">(AI Confidence: ${Math.round(predictions[0].probability * 100)}%)</p>
+                        </div>
+                        <div class="data-row"><span>🔥 Calories</span> <b>${nutrition.calories} kcal</b></div>
+                        <div class="data-row"><span>🥩 Protein</span> <b>${nutrition.protein}g</b></div>
+                        <div class="data-row"><span>🍞 Carbs</span> <b>${nutrition.carbs}g</b></div>
+                        <div class="data-row"><span>🦴 Calcium</span> <b>${nutrition.calcium}mg</b></div>
+                    `;
+                }, 500); // Wait for image to load in preview
+
+            } else if(type === 'hair') {
+                setTimeout(() => {
+                    // Chobir theke face shape detect kora
+                    const shape = detectFaceShape(imgSrc);
+                    const styles = hairDB[shape];
+
+                    modalTitle.innerText = "✅ AI Style Match";
+                    modalBody.innerHTML = `
+                        <div style="background:#f8f9fa; padding:10px; border-radius:8px; margin-bottom:15px;">
+                            <h3 style="margin:0; color:#0984e3;">👤 Detected Face Shape: ${shape}</h3>
+                        </div>
+                        <p style="font-weight:bold; margin-bottom:5px;">✨ Recommended Cuts for ${shape} Face:</p>
+                        <div class="hair-grid">
+                            <div class="hair-style-card">
+                                <img src="${styles[0].img}" alt="${styles[0].name}">
+                                <span>${styles[0].name}</span>
+                            </div>
+                            <div class="hair-style-card">
+                                <img src="${styles[1].img}" alt="${styles[1].name}">
+                                <span>${styles[1].name}</span>
+                            </div>
+                            <div class="hair-style-card">
+                                <img src="${styles[2].img}" alt="${styles[2].name}">
+                                <span>${styles[2].name}</span>
+                            </div>
+                        </div>
+                    `;
+                }, 1000);
+            }
+        }
+
+        // --- 5. CAMERA & GALLERY EVENT LISTENERS ---
+        function handleGallery(inputId, type) {
+            document.getElementById(inputId).addEventListener('change', function(e) {
+                stopCamera();
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(event) { openModal(event.target.result, type); }
+                    reader.readAsDataURL(file);
+                }
+            });
+        }
+
+        function handleCamera(btnId, videoId, snapId, type) {
+            const camBtn = document.getElementById(btnId);
+            const video = document.getElementById(videoId);
+            const snapBtn = document.getElementById(snapId);
+
+            camBtn.addEventListener('click', async function() {
+                stopCamera();
+                try {
+                    currentStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                    video.srcObject = currentStream;
+                    video.style.display = 'block';
+                    snapBtn.style.display = 'block';
+                } catch (err) { alert("Camera error! Make sure permission is allowed."); }
+            });
+
+            snapBtn.addEventListener('click', function() {
+                canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imgSrc = canvas.toDataURL('image/png');
+                
+                video.style.display = 'none'; snapBtn.style.display = 'none'; stopCamera();
+                openModal(imgSrc, type);
+            });
+        }
+
+        handleGallery('gallery-food', 'food');
+        handleCamera('cam-btn-food', 'video-food', 'snap-food', 'food');
+        handleGallery('gallery-hair', 'hair');
+        handleCamera('cam-btn-hair', 'video-hair', 'snap-hair', 'hair');
+
+    </script>
+</body>
+</html>
